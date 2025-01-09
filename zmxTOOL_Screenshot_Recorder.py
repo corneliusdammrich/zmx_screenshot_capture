@@ -12,6 +12,8 @@ from pynput import keyboard
 import psutil
 import traceback
 
+MARKER_FILENAME = ".zmxTOOL_session"  # Hidden marker file for valid sessions
+
 def resource_path(relative_path):
     """
     Get absolute path to resource, works for dev and for PyInstaller.
@@ -169,7 +171,6 @@ class ScreenshotApp:
         self.new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
         self.new_session_entry.pack(side='left', padx=(10,5))
         self.settings_widgets.append(self.new_session_entry)
-        # Bind key release event to check session existence on typing
         self.new_session_entry.bind("<KeyRelease>", self.on_session_name_change)
         # "Create New Session" button removed as requested
 
@@ -215,16 +216,17 @@ class ScreenshotApp:
 
     def on_session_name_change(self, event):
         """Called on every keystroke in the session entry to update the start button label."""
-        session = self.session_name.get()
-        if session in self.sessions:
-            self.update_start_button_label()
-        else:
-            self.start_button.config(text="Start")
+        self.update_start_button_label()
 
     def update_start_button_label(self):
-        session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
+        session = self.session_name.get()
+        save_dir = self.save_directory.get()
+        if not session or not save_dir:
+            self.start_button.config(text="Start")
+            return
+        session_folder = os.path.join(save_dir, session)
         if os.path.isdir(session_folder):
-            files = [f for f in os.listdir(session_folder) if f.startswith(f"{self.session_name.get()}_")]
+            files = [f for f in os.listdir(session_folder) if f.startswith(f"{session}_")]
             if files:
                 self.start_button.config(text="Continue")
             else:
@@ -256,8 +258,12 @@ class ScreenshotApp:
         if self.save_directory.get() and self.session_name.get():
             session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
             os.makedirs(session_folder, exist_ok=True)
+            # Create marker file if not exists
+            marker_path = os.path.join(session_folder, MARKER_FILENAME)
+            if not os.path.exists(marker_path):
+                with open(marker_path, "w") as f:
+                    f.write("This folder is a valid zmxTOOL session folder.")
             self.log_file = os.path.join(session_folder, "screenshot_log.txt")
-            # Counter file logic removed for file-based counter
             self.load_counter()
 
     def load_counter(self):
@@ -277,9 +283,6 @@ class ScreenshotApp:
                     except:
                         pass
         self.counter = max_counter + 1
-
-    def save_counter(self):
-        pass  # Not used
 
     def log_event(self, message, level="INFO"):
         if not self.enable_logging.get():
@@ -343,10 +346,17 @@ class ScreenshotApp:
             self.movement_status_label.config(text="Movement: None", foreground="red")
 
     def load_sessions(self):
+        """Load only directories that contain the session marker file."""
         if self.save_directory.get() and os.path.isdir(self.save_directory.get()):
             try:
-                self.sessions = [d for d in os.listdir(self.save_directory.get())
-                                 if os.path.isdir(os.path.join(self.save_directory.get(), d))]
+                all_dirs = [d for d in os.listdir(self.save_directory.get()) 
+                            if os.path.isdir(os.path.join(self.save_directory.get(), d))]
+                valid_sessions = []
+                for d in all_dirs:
+                    marker_path = os.path.join(self.save_directory.get(), d, MARKER_FILENAME)
+                    if os.path.exists(marker_path):
+                        valid_sessions.append(d)
+                self.sessions = valid_sessions
             except Exception as e:
                 self.log_event(f"Error reading session folders: {e}", level="ERROR")
                 self.sessions = []
@@ -383,6 +393,10 @@ class ScreenshotApp:
         self.sessions.append(session)
         session_folder = os.path.join(self.save_directory.get(), session)
         os.makedirs(session_folder, exist_ok=True)
+        # Create marker file
+        marker_path = os.path.join(session_folder, MARKER_FILENAME)
+        with open(marker_path, "w") as f:
+            f.write("This folder is a valid zmxTOOL session folder.")
         self.update_session_dropdown()
         messagebox.showinfo("Success", f"Session '{session}' created successfully.")
         self.log_event(f"Session '{session}' created.")
@@ -709,14 +723,6 @@ class ScreenshotApp:
         else:
             self.save_settings()
             self.root.destroy()
-
-    def on_session_name_change(self, event):
-        """Called on every keystroke in the session entry to update the start button label."""
-        session = self.session_name.get()
-        if session in self.sessions:
-            self.update_start_button_label()
-        else:
-            self.start_button.config(text="Start")
 
 def main():
     try:
