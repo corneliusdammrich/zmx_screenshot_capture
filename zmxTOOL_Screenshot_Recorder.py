@@ -68,20 +68,27 @@ class ScreenshotApp:
 
     def create_widgets(self):
         padding = {'padx': 10, 'pady': 5}
+        self.settings_widgets = []
 
         # Save Directory
         dir_frame = ttk.Frame(self.root)
         dir_frame.pack(fill='x', **padding)
         ttk.Label(dir_frame, text="Save Directory:").pack(side='left')
-        ttk.Entry(dir_frame, textvariable=self.save_directory, width=40).pack(side='left', padx=(5,5))
-        ttk.Button(dir_frame, text="Browse", command=self.browse_directory).pack(side='left')
+        self.directory_entry = ttk.Entry(dir_frame, textvariable=self.save_directory, width=40)
+        self.directory_entry.pack(side='left', padx=(5,5))
+        self.settings_widgets.append(self.directory_entry)
+        self.browse_button = ttk.Button(dir_frame, text="Browse", command=self.browse_directory)
+        self.browse_button.pack(side='left')
+        self.settings_widgets.append(self.browse_button)
 
         # File Format
         format_frame = ttk.Frame(self.root)
         format_frame.pack(fill='x', **padding)
         ttk.Label(format_frame, text="File Format:").pack(side='left')
         format_options = ["png", "jpg"]
-        ttk.OptionMenu(format_frame, self.file_format, self.file_format.get(), *format_options, command=self.on_format_change).pack(side='left', padx=(5,5))
+        self.file_format_option = ttk.OptionMenu(format_frame, self.file_format, self.file_format.get(), *format_options, command=self.on_format_change)
+        self.file_format_option.pack(side='left', padx=(5,5))
+        self.settings_widgets.append(self.file_format_option)
 
         # JPEG Quality Slider
         self.jpeg_quality_frame = ttk.Frame(self.root)
@@ -90,34 +97,43 @@ class ScreenshotApp:
         self.jpeg_quality_slider = ttk.Scale(self.jpeg_quality_frame, from_=1, to=10, orient='horizontal',
                                              variable=self.jpeg_quality, command=self.on_quality_change, length=200)
         self.jpeg_quality_slider.pack(side='left', padx=(5,5), fill='x', expand=True)
+        self.settings_widgets.append(self.jpeg_quality_slider)
         self.jpeg_quality_value_label = ttk.Label(self.jpeg_quality_frame, textvariable=self.jpeg_quality)
         self.jpeg_quality_value_label.pack(side='left', padx=(5,0))
+        self.settings_widgets.append(self.jpeg_quality_value_label)
         self.jpeg_quality_frame.pack_forget()
 
         # Interval
         interval_frame = ttk.Frame(self.root)
         interval_frame.pack(fill='x', **padding)
         ttk.Label(interval_frame, text="Interval (seconds):").pack(side='left')
-        interval_spinbox = ttk.Spinbox(interval_frame, textvariable=self.interval, from_=0.1, to=60.0,
-                                       increment=0.1, format="%.1f", width=10)
-        interval_spinbox.pack(side='left', padx=(5,5))
-        interval_spinbox.set(5.0)
+        self.interval_spinbox = ttk.Spinbox(interval_frame, textvariable=self.interval, from_=0.1, to=60.0,
+                                            increment=0.1, format="%.1f", width=10)
+        self.interval_spinbox.pack(side='left', padx=(5,5))
+        self.settings_widgets.append(self.interval_spinbox)
+        self.interval_spinbox.set(5.0)
 
         # Movement Detection Mode
         mode_frame = ttk.Frame(self.root)
         mode_frame.pack(fill='x', **padding)
         ttk.Label(mode_frame, text="Movement Detection Mode:").pack(side='left')
         mode_options = [("Image-Based", "image"), ("Input-Based", "input"), ("Combined", "combined")]
+        self.mode_radiobuttons = []
         for text, mode in mode_options:
-            ttk.Radiobutton(mode_frame, text=text, variable=self.movement_detection_mode, value=mode,
-                            command=self.on_mode_change).pack(side='left', padx=(10,0))
+            rb = ttk.Radiobutton(mode_frame, text=text, variable=self.movement_detection_mode, value=mode,
+                                 command=self.on_mode_change)
+            rb.pack(side='left', padx=(10,0))
+            self.mode_radiobuttons.append(rb)
+            self.settings_widgets.append(rb)
 
         # Motion Detection Toggle
         detection_toggle_frame = ttk.Frame(self.root)
         detection_toggle_frame.pack(fill='x', **padding)
         ttk.Label(detection_toggle_frame, text="Motion Detection:").pack(side='left')
-        ttk.Checkbutton(detection_toggle_frame, text="Enable", variable=self.enable_motion_detection,
-                        command=self.on_detection_toggle).pack(side='left', padx=(5,0))
+        self.motion_detection_check = ttk.Checkbutton(detection_toggle_frame, text="Enable", variable=self.enable_motion_detection,
+                                                      command=self.on_detection_toggle)
+        self.motion_detection_check.pack(side='left', padx=(5,0))
+        self.settings_widgets.append(self.motion_detection_check)
 
         # Movement Sensitivity Slider
         sensitivity_frame = ttk.Frame(self.root)
@@ -128,9 +144,10 @@ class ScreenshotApp:
             variable=self.movement_sensitivity, command=self.on_sensitivity_change, length=200
         )
         self.sensitivity_slider.pack(side='left', padx=(5,5), fill='x', expand=True)
-        # Label to display current sensitivity value
+        self.settings_widgets.append(self.sensitivity_slider)
         self.sensitivity_value_label = ttk.Label(sensitivity_frame, text=f"{self.movement_sensitivity.get()}%")
         self.sensitivity_value_label.pack(side='left', padx=(5,0))
+        self.settings_widgets.append(self.sensitivity_value_label)
         self.sensitivity_slider.set(2)
         self.sensitivity_slider.pack_forget()
 
@@ -140,9 +157,11 @@ class ScreenshotApp:
         ttk.Label(session_frame, text="Session:").pack(side='left')
         self.session_dropdown = ttk.OptionMenu(session_frame, self.session_name, "", command=self.on_session_select)
         self.session_dropdown.pack(side='left', padx=(5,5))
-        new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
-        new_session_entry.pack(side='left', padx=(10,5))
-        ttk.Button(session_frame, text="Create New Session", command=self.create_new_session).pack(side='left')
+        self.settings_widgets.append(self.session_dropdown)
+        self.new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
+        self.new_session_entry.pack(side='left', padx=(10,5))
+        self.settings_widgets.append(self.new_session_entry)
+        # "Create New Session" button removed as requested
 
         # Monitor Selection
         monitor_frame = ttk.Frame(self.root)
@@ -150,6 +169,7 @@ class ScreenshotApp:
         ttk.Label(monitor_frame, text="Select Monitor:").pack(side='left')
         self.monitor_menu = ttk.OptionMenu(monitor_frame, self.selected_monitor, "")
         self.monitor_menu.pack(side='left', padx=(5,5))
+        self.settings_widgets.append(self.monitor_menu)
 
         # Start/Stop Buttons
         button_frame = ttk.Frame(self.root)
@@ -183,6 +203,14 @@ class ScreenshotApp:
         self.status_label = ttk.Label(self.root, text="Status: Idle")
         self.status_label.pack(fill='x', **padding)
 
+    def disable_settings(self):
+        for widget in self.settings_widgets:
+            widget.config(state='disabled')
+
+    def enable_settings(self):
+        for widget in self.settings_widgets:
+            widget.config(state='normal')
+
     def browse_directory(self):
         directory = filedialog.askdirectory()
         if directory:
@@ -200,32 +228,30 @@ class ScreenshotApp:
             session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
             os.makedirs(session_folder, exist_ok=True)
             self.log_file = os.path.join(session_folder, "screenshot_log.txt")
-            self.counter_file = os.path.join(session_folder, "screenshot_counter.txt")
-            if not os.path.exists(self.log_file):
-                with open(self.log_file, 'w') as f:
-                    f.write(f"zmxTOOL Screen(shot) Recorder Log - Session: {self.session_name.get()}\n")
-                    f.write("=========================================\n\n")
+            # Counter file logic removed for file-based counter
             self.load_counter()
 
     def load_counter(self):
-        if self.counter_file and os.path.exists(self.counter_file):
-            try:
-                with open(self.counter_file, 'r') as f:
-                    last_counter = f.read().strip()
-                    self.counter = int(last_counter) + 1 if last_counter.isdigit() else 1
-            except Exception as e:
-                self.log_event(f"Error reading counter file: {e}", level="ERROR")
-                self.counter = 1
-        else:
-            self.counter = 1
+        """Scan the session folder to determine the next screenshot counter."""
+        session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
+        os.makedirs(session_folder, exist_ok=True)
+        prefix = f"{self.session_name.get()}_"
+        max_counter = 0
+        for filename in os.listdir(session_folder):
+            if filename.startswith(prefix):
+                parts = filename.split('_')
+                if len(parts) > 1:
+                    num_part = parts[-1].split('.')[0]
+                    try:
+                        num = int(num_part)
+                        max_counter = max(max_counter, num)
+                    except:
+                        pass
+        self.counter = max_counter + 1
 
     def save_counter(self):
-        if self.counter_file:
-            try:
-                with open(self.counter_file, 'w') as f:
-                    f.write(str(self.counter))
-            except Exception as e:
-                self.log_event(f"Error writing counter file: {e}", level="ERROR")
+        # This method can be kept or removed since it's not used for counter retrieval now.
+        pass
 
     def log_event(self, message, level="INFO"):
         if self.log_file:
@@ -272,7 +298,6 @@ class ScreenshotApp:
             self.sensitivity_slider.pack_forget()
 
     def on_sensitivity_change(self, value):
-        # Update sensitivity value and label
         self.movement_sensitivity.set(int(float(value)))
         self.sensitivity_value_label.config(text=f"{self.movement_sensitivity.get()}%")
         self.log_event(f"Movement Sensitivity set to {self.movement_sensitivity.get()}%.")
@@ -315,6 +340,7 @@ class ScreenshotApp:
         print(f"Session selected: {selected_session}")
 
     def create_new_session(self):
+        # This method remains available but not triggered by UI anymore.
         session = self.session_name.get().strip()
         if not session:
             messagebox.showwarning("Input Error", "Please enter a valid session name.")
@@ -355,6 +381,7 @@ class ScreenshotApp:
 
         self.initialize_logging_and_counter()
         self.log_event("Starting screenshot capture.")
+        self.disable_settings()  # Disable settings when recording starts
         self.start_button.config(state='disabled')
         self.stop_button.config(state='normal')
         self.is_running = True
@@ -375,6 +402,7 @@ class ScreenshotApp:
             self.stop_event.set()
             self.progress_bar.stop()
             self.is_running = False
+            self.enable_settings()  # Re-enable settings when recording stops
             self.start_button.config(state='normal')
             self.stop_button.config(state='disabled')
             self.update_status("Stopped")
@@ -519,7 +547,7 @@ class ScreenshotApp:
                 img.save(filepath, "JPEG", quality=pillow_quality)
             self.queue_status(f"Saved: {filename} ({detection_type.capitalize()} Detection)")
             self.log_event(f"Saved: {filename} ({detection_type.capitalize()} Detection)")
-            self.save_counter()
+            # save_counter is not used since we rely on file scanning in load_counter
             self.counter += 1
             if self.counter > 999999:
                 self.queue_status("Error: Maximum screenshot limit reached.")
