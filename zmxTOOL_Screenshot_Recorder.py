@@ -33,7 +33,7 @@ class ScreenshotApp:
 
         # Initialize variables
         self.save_directory = tk.StringVar()
-        self.file_format = tk.StringVar(value="png")
+        self.file_format = "jpg"  # Fixed to JPEG
         self.interval = tk.DoubleVar(value=5.0)
         self.selected_monitor = tk.StringVar()
         self.jpeg_quality = tk.IntVar(value=5)
@@ -73,8 +73,12 @@ class ScreenshotApp:
         padding = {'padx': 10, 'pady': 5}
         self.settings_widgets = []
 
+        # Group 1: File Settings
+        file_frame = ttk.LabelFrame(self.root, text="File Settings")
+        file_frame.pack(fill='x', padx=10, pady=5)
+
         # Save Directory
-        dir_frame = ttk.Frame(self.root)
+        dir_frame = ttk.Frame(file_frame)
         dir_frame.pack(fill='x', **padding)
         ttk.Label(dir_frame, text="Save Directory:").pack(side='left')
         self.directory_entry = ttk.Entry(dir_frame, textvariable=self.save_directory, width=40)
@@ -84,40 +88,60 @@ class ScreenshotApp:
         self.browse_button.pack(side='left')
         self.settings_widgets.append(self.browse_button)
 
-        # File Format
-        format_frame = ttk.Frame(self.root)
-        format_frame.pack(fill='x', **padding)
-        ttk.Label(format_frame, text="File Format:").pack(side='left')
-        format_options = ["png", "jpg"]
-        self.file_format_option = ttk.OptionMenu(format_frame, self.file_format, self.file_format.get(), *format_options, command=self.on_format_change)
-        self.file_format_option.pack(side='left', padx=(5,5))
-        self.settings_widgets.append(self.file_format_option)
-
         # JPEG Quality Slider
-        self.jpeg_quality_frame = ttk.Frame(self.root)
-        self.jpeg_quality_label = ttk.Label(self.jpeg_quality_frame, text="JPEG Quality:")
-        self.jpeg_quality_label.pack(side='left')
+        self.jpeg_quality_frame = ttk.Frame(file_frame)
+        self.jpeg_quality_frame.pack(fill='x', padx=10, pady=5)
+        ttk.Label(self.jpeg_quality_frame, text="JPEG Quality:").pack(side='left')
         self.jpeg_quality_slider = ttk.Scale(self.jpeg_quality_frame, from_=1, to=10, orient='horizontal',
                                              variable=self.jpeg_quality, command=self.on_quality_change, length=200)
         self.jpeg_quality_slider.pack(side='left', padx=(5,5), fill='x', expand=True)
-        self.settings_widgets.append(self.jpeg_quality_slider)
         self.jpeg_quality_value_label = ttk.Label(self.jpeg_quality_frame, textvariable=self.jpeg_quality)
         self.jpeg_quality_value_label.pack(side='left', padx=(5,0))
-        self.settings_widgets.append(self.jpeg_quality_value_label)
-        self.jpeg_quality_frame.pack_forget()
+        self.settings_widgets.extend([self.jpeg_quality_slider, self.jpeg_quality_value_label])
 
         # Interval
-        interval_frame = ttk.Frame(self.root)
+        interval_frame = ttk.Frame(file_frame)
         interval_frame.pack(fill='x', **padding)
         ttk.Label(interval_frame, text="Interval (seconds):").pack(side='left')
         self.interval_spinbox = ttk.Spinbox(interval_frame, textvariable=self.interval, from_=0.1, to=60.0,
                                             increment=0.1, format="%.1f", width=10)
         self.interval_spinbox.pack(side='left', padx=(5,5))
-        self.settings_widgets.append(self.interval_spinbox)
         self.interval_spinbox.set(5.0)
+        self.settings_widgets.append(self.interval_spinbox)
+
+        # Session Management
+        session_frame = ttk.Frame(file_frame)
+        session_frame.pack(fill='x', **padding)
+        ttk.Label(session_frame, text="Session:").pack(side='left')
+        self.session_dropdown = ttk.OptionMenu(session_frame, self.session_name, "Select Session", command=self.on_session_select)
+        self.session_dropdown.pack(side='left', padx=(5,5))
+        self.settings_widgets.append(self.session_dropdown)
+        self.new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
+        self.new_session_entry.pack(side='left', padx=(10,5))
+        self.new_session_entry.bind("<KeyRelease>", self.on_session_name_change)
+        self.settings_widgets.append(self.new_session_entry)
+
+        # Monitor Selection
+        monitor_frame = ttk.Frame(file_frame)
+        monitor_frame.pack(fill='x', **padding)
+        ttk.Label(monitor_frame, text="Select Monitor:").pack(side='left')
+        self.monitor_menu = ttk.OptionMenu(monitor_frame, self.selected_monitor, "")
+        self.monitor_menu.pack(side='left', padx=(5,5))
+        self.settings_widgets.append(self.monitor_menu)
+
+        # Logging Toggle
+        log_frame = ttk.Frame(file_frame)
+        log_frame.pack(fill='x', **padding)
+        self.logging_check = ttk.Checkbutton(log_frame, text="Enable Logging", variable=self.enable_logging)
+        self.logging_check.pack(side='left')
+        self.settings_widgets.append(self.logging_check)
+
+        # Group 2: Detection Settings
+        detection_frame = ttk.LabelFrame(self.root, text="Detection Settings")
+        detection_frame.pack(fill='x', padx=10, pady=5)
 
         # Movement Detection Mode
-        mode_frame = ttk.Frame(self.root)
+        mode_frame = ttk.Frame(detection_frame)
         mode_frame.pack(fill='x', **padding)
         ttk.Label(mode_frame, text="Movement Detection Mode:").pack(side='left')
         mode_options = [("Image-Based", "image"), ("Input-Based", "input"), ("Combined", "combined")]
@@ -130,7 +154,7 @@ class ScreenshotApp:
             self.settings_widgets.append(rb)
 
         # Motion Detection Toggle
-        detection_toggle_frame = ttk.Frame(self.root)
+        detection_toggle_frame = ttk.Frame(detection_frame)
         detection_toggle_frame.pack(fill='x', **padding)
         ttk.Label(detection_toggle_frame, text="Motion Detection:").pack(side='left')
         self.motion_detection_check = ttk.Checkbutton(detection_toggle_frame, text="Enable", variable=self.enable_motion_detection,
@@ -139,7 +163,7 @@ class ScreenshotApp:
         self.settings_widgets.append(self.motion_detection_check)
 
         # Movement Sensitivity Slider
-        sensitivity_frame = ttk.Frame(self.root)
+        sensitivity_frame = ttk.Frame(detection_frame)
         sensitivity_frame.pack(fill='x', **padding)
         ttk.Label(sensitivity_frame, text="Movement Sensitivity (%):").pack(side='left')
         self.sensitivity_slider = ttk.Scale(
@@ -147,75 +171,49 @@ class ScreenshotApp:
             variable=self.movement_sensitivity, command=self.on_sensitivity_change, length=200
         )
         self.sensitivity_slider.pack(side='left', padx=(5,5), fill='x', expand=True)
-        self.settings_widgets.append(self.sensitivity_slider)
         self.sensitivity_value_label = ttk.Label(sensitivity_frame, text=f"{self.movement_sensitivity.get()}%")
         self.sensitivity_value_label.pack(side='left', padx=(5,0))
-        self.settings_widgets.append(self.sensitivity_value_label)
         self.sensitivity_slider.set(2)
         self.sensitivity_slider.pack_forget()
+        self.settings_widgets.extend([self.sensitivity_slider, self.sensitivity_value_label])
 
-        # Logging Toggle
-        log_frame = ttk.Frame(self.root)
-        log_frame.pack(fill='x', **padding)
-        self.logging_check = ttk.Checkbutton(log_frame, text="Enable Logging", variable=self.enable_logging)
-        self.logging_check.pack(side='left')
-        self.settings_widgets.append(self.logging_check)
-
-        # Session Management
-        session_frame = ttk.Frame(self.root)
-        session_frame.pack(fill='x', **padding)
-        ttk.Label(session_frame, text="Session:").pack(side='left')
-        self.session_dropdown = ttk.OptionMenu(session_frame, self.session_name, "", command=self.on_session_select)
-        self.session_dropdown.pack(side='left', padx=(5,5))
-        self.settings_widgets.append(self.session_dropdown)
-        self.new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
-        self.new_session_entry.pack(side='left', padx=(10,5))
-        self.settings_widgets.append(self.new_session_entry)
-        self.new_session_entry.bind("<KeyRelease>", self.on_session_name_change)
-        # "Create New Session" button removed as requested
-
-        # Monitor Selection
-        monitor_frame = ttk.Frame(self.root)
-        monitor_frame.pack(fill='x', **padding)
-        ttk.Label(monitor_frame, text="Select Monitor:").pack(side='left')
-        self.monitor_menu = ttk.OptionMenu(monitor_frame, self.selected_monitor, "")
-        self.monitor_menu.pack(side='left', padx=(5,5))
-        self.settings_widgets.append(self.monitor_menu)
-
-        # Start/Stop Buttons
-        button_frame = ttk.Frame(self.root)
-        button_frame.pack(fill='x', **padding)
-        self.start_button = ttk.Button(button_frame, text="Start", command=self.start_capturing)
-        self.start_button.pack(side='left', expand=True, fill='x', padx=(0,5))
-        self.stop_button = ttk.Button(button_frame, text="Stop", command=self.stop_capturing, state='disabled')
-        self.stop_button.pack(side='left', expand=True, fill='x', padx=(5,0))
+        # Group 3: Status Functions
+        status_frame = ttk.LabelFrame(self.root, text="Status Functions")
+        status_frame.pack(fill='both', expand=True, padx=10, pady=5)
 
         # Progress Bar
-        progress_frame = ttk.Frame(self.root)
+        progress_frame = ttk.Frame(status_frame)
         progress_frame.pack(fill='x', **padding)
         ttk.Label(progress_frame, text="Activity:").pack(side='left')
         self.progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate')
         self.progress_bar.pack(side='left', fill='x', expand=True, padx=(5,0))
 
         # CPU Utilization
-        cpu_frame = ttk.LabelFrame(self.root, text="CPU Utilization")
+        cpu_frame = ttk.LabelFrame(status_frame, text="CPU Utilization")
         cpu_frame.pack(fill='x', padx=10, pady=10)
         self.cpu_progress = ttk.Progressbar(cpu_frame, orient='horizontal', length=300,
                                             mode='determinate', maximum=100, style="green.Horizontal.TProgressbar")
         self.cpu_progress.pack(padx=10, pady=10)
 
         # Status Labels
-        self.screenshot_label = ttk.Label(self.root, text="Current Screenshot: None")
+        self.screenshot_label = ttk.Label(status_frame, text="Current Screenshot: None")
         self.screenshot_label.pack(fill='x', padx=10, pady=5)
-        self.movement_status_label = ttk.Label(self.root, text="Movement: None", foreground="red")
+        self.movement_status_label = ttk.Label(status_frame, text="Movement: None", foreground="red")
         self.movement_status_label.pack(fill='x', padx=10, pady=5)
-        self.input_status_label = ttk.Label(self.root, text="Input Detection: Active", foreground="green")
+        self.input_status_label = ttk.Label(status_frame, text="Input Detection: Active", foreground="green")
         self.input_status_label.pack(fill='x', padx=10, pady=5)
-        self.status_label = ttk.Label(self.root, text="Status: Idle")
-        self.status_label.pack(fill='x', **padding)
+        self.status_label = ttk.Label(status_frame, text="Status: Idle")
+        self.status_label.pack(fill='x', padx=10, pady=5)
+
+        # Start/Stop Buttons placed at bottom outside groups
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(fill='x', padx=10, pady=5)
+        self.start_button = ttk.Button(button_frame, text="Start", command=self.start_capturing)
+        self.start_button.pack(side='left', expand=True, fill='x', padx=(0,5))
+        self.stop_button = ttk.Button(button_frame, text="Stop", command=self.stop_capturing, state='disabled')
+        self.stop_button.pack(side='left', expand=True, fill='x', padx=(5,0))
 
     def on_session_name_change(self, event):
-        """Called on every keystroke in the session entry to update the start button label."""
         self.update_start_button_label()
 
     def update_start_button_label(self):
@@ -236,17 +234,22 @@ class ScreenshotApp:
 
     def disable_settings(self):
         for widget in self.settings_widgets:
-            widget.config(state='disabled')
+            try:
+                widget.config(state='disabled')
+            except:
+                pass
 
     def enable_settings(self):
         for widget in self.settings_widgets:
-            widget.config(state='normal')
+            try:
+                widget.config(state='normal')
+            except:
+                pass
 
     def browse_directory(self):
         directory = filedialog.askdirectory()
         if directory:
             self.save_directory.set(directory)
-            # Clear session data on new directory selection
             self.session_name.set("")
             self.sessions = []
             self.load_sessions()
@@ -254,11 +257,9 @@ class ScreenshotApp:
             self.save_settings()
 
     def initialize_logging_and_counter(self):
-        """Initialize log file and session counter based on current session."""
         if self.save_directory.get() and self.session_name.get():
             session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
             os.makedirs(session_folder, exist_ok=True)
-            # Create marker file if not exists
             marker_path = os.path.join(session_folder, MARKER_FILENAME)
             if not os.path.exists(marker_path):
                 with open(marker_path, "w") as f:
@@ -267,7 +268,6 @@ class ScreenshotApp:
             self.load_counter()
 
     def load_counter(self):
-        """Scan the session folder to determine the next screenshot counter."""
         session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
         os.makedirs(session_folder, exist_ok=True)
         prefix = f"{self.session_name.get()}_"
@@ -314,11 +314,7 @@ class ScreenshotApp:
                 self.selected_monitor.set(monitor_list[0])
 
     def on_format_change(self, *args):
-        selected_format = self.file_format.get().lower()
-        if selected_format == "jpg":
-            self.jpeg_quality_frame.pack(fill='x', padx=10, pady=5)
-        else:
-            self.jpeg_quality_frame.pack_forget()
+        pass
 
     def on_quality_change(self, value):
         self.jpeg_quality.set(int(float(value)))
@@ -346,7 +342,6 @@ class ScreenshotApp:
             self.movement_status_label.config(text="Movement: None", foreground="red")
 
     def load_sessions(self):
-        """Load only directories that contain the session marker file."""
         if self.save_directory.get() and os.path.isdir(self.save_directory.get()):
             try:
                 all_dirs = [d for d in os.listdir(self.save_directory.get()) 
@@ -376,13 +371,11 @@ class ScreenshotApp:
         self.update_start_button_label()
 
     def on_session_select(self, value):
-        selected_session = value
-        self.session_name.set(selected_session)
-        print(f"Session selected: {selected_session}")
+        self.session_name.set(value)
+        print(f"Session selected: {value}")
         self.update_start_button_label()
 
     def create_new_session(self):
-        # This method remains available but not triggered by UI anymore.
         session = self.session_name.get().strip()
         if not session:
             messagebox.showwarning("Input Error", "Please enter a valid session name.")
@@ -393,7 +386,6 @@ class ScreenshotApp:
         self.sessions.append(session)
         session_folder = os.path.join(self.save_directory.get(), session)
         os.makedirs(session_folder, exist_ok=True)
-        # Create marker file
         marker_path = os.path.join(session_folder, MARKER_FILENAME)
         with open(marker_path, "w") as f:
             f.write("This folder is a valid zmxTOOL session folder.")
@@ -418,16 +410,13 @@ class ScreenshotApp:
         except:
             messagebox.showwarning("Input Error", "Interval must be a positive number.")
             return
-        if self.file_format.get() not in ["png", "jpg"]:
-            messagebox.showwarning("Input Error", "Unsupported file format selected.")
-            return
         if not self.selected_monitor.get():
             messagebox.showwarning("Input Error", "Please select a monitor.")
             return
 
         self.initialize_logging_and_counter()
         self.log_event("Starting screenshot capture.")
-        self.disable_settings()  # Disable settings when recording starts
+        self.disable_settings()
         self.start_button.config(state='disabled')
         self.stop_button.config(state='normal')
         self.is_running = True
@@ -448,13 +437,16 @@ class ScreenshotApp:
             self.stop_event.set()
             self.progress_bar.stop()
             self.is_running = False
-            self.enable_settings()  # Re-enable settings when recording stops
+            self.enable_settings()
             self.start_button.config(state='normal')
             self.stop_button.config(state='disabled')
             self.update_status("Stopped")
             self.log_event("Stopped screenshot capture.")
             self.stop_input_listeners()
             self.save_settings()
+            # Refresh session list after stopping recording
+            self.load_sessions()
+            self.update_session_dropdown()
 
     def capture_screenshots(self):
         try:
@@ -574,7 +566,7 @@ class ScreenshotApp:
 
     def save_screenshot(self, img, current_date, detection_type="unknown"):
         counter_str = f"{self.counter:06d}"
-        extension = "png" if self.file_format.get() == "png" else "jpeg"
+        extension = "jpeg"  # Fixed to JPEG
         filename = f"{self.session_name.get()}_{counter_str}.{extension}"
         session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
         os.makedirs(session_folder, exist_ok=True)
@@ -582,15 +574,12 @@ class ScreenshotApp:
 
         try:
             self.screenshot_label.config(text=f"Saving: {filename}")
-            if extension == "png":
-                img.save(filepath, "PNG")
+            img = img.convert("RGB")  # Ensure image is in RGB mode for JPEG
+            if self.jpeg_quality.get() == 10:
+                pillow_quality = 95
             else:
-                img = img.convert("RGB")
-                if self.jpeg_quality.get() == 10:
-                    pillow_quality = 95
-                else:
-                    pillow_quality = max(1, min(95, int((self.jpeg_quality.get() / 10) * 95)))
-                img.save(filepath, "JPEG", quality=pillow_quality)
+                pillow_quality = max(1, min(95, int((self.jpeg_quality.get() / 10) * 95)))
+            img.save(filepath, "JPEG", quality=pillow_quality)
             self.queue_status(f"Saved: {filename} ({detection_type.capitalize()} Detection)")
             self.log_event(f"Saved: {filename} ({detection_type.capitalize()} Detection)")
             self.counter += 1
@@ -613,7 +602,6 @@ class ScreenshotApp:
     def save_settings(self):
         settings = {
             "save_directory": self.save_directory.get(),
-            "file_format": self.file_format.get(),
             "interval": self.interval.get(),
             "selected_monitor": self.selected_monitor.get(),
             "jpeg_quality": self.jpeg_quality.get(),
@@ -622,7 +610,6 @@ class ScreenshotApp:
             "movement_sensitivity": self.movement_sensitivity.get(),
             "enable_motion_detection": self.enable_motion_detection.get(),
             "enable_logging": self.enable_logging.get()
-            # session_name is intentionally not saved
         }
         try:
             with open(self.settings_file, 'w') as f:
@@ -637,7 +624,6 @@ class ScreenshotApp:
                 with open(self.settings_file, 'r') as f:
                     settings = json.load(f)
                 self.save_directory.set(settings.get("save_directory", ""))
-                self.file_format.set(settings.get("file_format", "png"))
                 self.interval.set(settings.get("interval", 5.0))
                 self.selected_monitor.set(settings.get("selected_monitor", ""))
                 self.jpeg_quality.set(settings.get("jpeg_quality", 5))
@@ -647,7 +633,6 @@ class ScreenshotApp:
                 self.enable_motion_detection.set(settings.get("enable_motion_detection", True))
                 self.enable_logging.set(settings.get("enable_logging", True))
                 self.session_name.set("")  # Do not restore session from settings
-                self.on_format_change()
                 self.on_mode_change()
                 self.on_detection_toggle()
                 self.load_sessions()
