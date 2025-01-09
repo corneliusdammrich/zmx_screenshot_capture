@@ -41,6 +41,7 @@ class ScreenshotApp:
         self.movement_sensitivity = tk.IntVar(value=2)
         self.enable_motion_detection = tk.BooleanVar(value=True)
 
+        self.enable_logging = tk.BooleanVar(value=True)  # New logging toggle
         self.session_name = tk.StringVar(value="")
         self.sessions = []
 
@@ -151,6 +152,13 @@ class ScreenshotApp:
         self.sensitivity_slider.set(2)
         self.sensitivity_slider.pack_forget()
 
+        # Logging Toggle
+        log_frame = ttk.Frame(self.root)
+        log_frame.pack(fill='x', **padding)
+        self.logging_check = ttk.Checkbutton(log_frame, text="Enable Logging", variable=self.enable_logging)
+        self.logging_check.pack(side='left')
+        self.settings_widgets.append(self.logging_check)
+
         # Session Management
         session_frame = ttk.Frame(self.root)
         session_frame.pack(fill='x', **padding)
@@ -161,7 +169,7 @@ class ScreenshotApp:
         self.new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
         self.new_session_entry.pack(side='left', padx=(10,5))
         self.settings_widgets.append(self.new_session_entry)
-        # "Create New Session" button removed as requested
+        # "Create New Session" button removed
 
         # Monitor Selection
         monitor_frame = ttk.Frame(self.root)
@@ -250,10 +258,11 @@ class ScreenshotApp:
         self.counter = max_counter + 1
 
     def save_counter(self):
-        # This method can be kept or removed since it's not used for counter retrieval now.
-        pass
+        pass  # Not used
 
     def log_event(self, message, level="INFO"):
+        if not self.enable_logging.get():
+            return
         if self.log_file:
             try:
                 with open(self.log_file, 'a') as f:
@@ -547,7 +556,6 @@ class ScreenshotApp:
                 img.save(filepath, "JPEG", quality=pillow_quality)
             self.queue_status(f"Saved: {filename} ({detection_type.capitalize()} Detection)")
             self.log_event(f"Saved: {filename} ({detection_type.capitalize()} Detection)")
-            # save_counter is not used since we rely on file scanning in load_counter
             self.counter += 1
             if self.counter > 999999:
                 self.queue_status("Error: Maximum screenshot limit reached.")
@@ -575,7 +583,8 @@ class ScreenshotApp:
             "movement_detection_mode": self.movement_detection_mode.get(),
             "detect_keyboard": self.detect_keyboard.get(),
             "movement_sensitivity": self.movement_sensitivity.get(),
-            "enable_motion_detection": self.enable_motion_detection.get()
+            "enable_motion_detection": self.enable_motion_detection.get(),
+            "enable_logging": self.enable_logging.get()  # Save logging preference
             # session_name is intentionally not saved
         }
         try:
@@ -599,6 +608,7 @@ class ScreenshotApp:
                 self.detect_keyboard.set(settings.get("detect_keyboard", True))
                 self.movement_sensitivity.set(settings.get("movement_sensitivity", 2))
                 self.enable_motion_detection.set(settings.get("enable_motion_detection", True))
+                self.enable_logging.set(settings.get("enable_logging", True))
                 self.session_name.set("")  # Do not restore session from settings
                 self.on_format_change()
                 self.on_mode_change()
