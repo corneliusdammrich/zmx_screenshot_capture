@@ -41,7 +41,7 @@ class ScreenshotApp:
         self.movement_sensitivity = tk.IntVar(value=2)
         self.enable_motion_detection = tk.BooleanVar(value=True)
 
-        self.enable_logging = tk.BooleanVar(value=True)  # New logging toggle
+        self.enable_logging = tk.BooleanVar(value=True)  # Logging toggle
         self.session_name = tk.StringVar(value="")
         self.sessions = []
 
@@ -169,7 +169,9 @@ class ScreenshotApp:
         self.new_session_entry = ttk.Entry(session_frame, textvariable=self.session_name, width=30)
         self.new_session_entry.pack(side='left', padx=(10,5))
         self.settings_widgets.append(self.new_session_entry)
-        # "Create New Session" button removed
+        # Bind key release event to check session existence on typing
+        self.new_session_entry.bind("<KeyRelease>", self.on_session_name_change)
+        # "Create New Session" button removed as requested
 
         # Monitor Selection
         monitor_frame = ttk.Frame(self.root)
@@ -210,6 +212,25 @@ class ScreenshotApp:
         self.input_status_label.pack(fill='x', padx=10, pady=5)
         self.status_label = ttk.Label(self.root, text="Status: Idle")
         self.status_label.pack(fill='x', **padding)
+
+    def on_session_name_change(self, event):
+        """Called on every keystroke in the session entry to update the start button label."""
+        session = self.session_name.get()
+        if session in self.sessions:
+            self.update_start_button_label()
+        else:
+            self.start_button.config(text="Start")
+
+    def update_start_button_label(self):
+        session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
+        if os.path.isdir(session_folder):
+            files = [f for f in os.listdir(session_folder) if f.startswith(f"{self.session_name.get()}_")]
+            if files:
+                self.start_button.config(text="Continue")
+            else:
+                self.start_button.config(text="Start")
+        else:
+            self.start_button.config(text="Start")
 
     def disable_settings(self):
         for widget in self.settings_widgets:
@@ -336,17 +357,19 @@ class ScreenshotApp:
         menu = self.session_dropdown["menu"]
         menu.delete(0, "end")
         for session in self.sessions:
-            menu.add_command(label=session, command=lambda value=session: self.session_name.set(value))
+            menu.add_command(label=session, command=lambda value=session: self.on_session_select(value))
         if self.sessions:
             if self.session_name.get() not in self.sessions:
                 self.session_name.set(self.sessions[0])
         else:
             self.session_name.set("")
+        self.update_start_button_label()
 
     def on_session_select(self, value):
         selected_session = value
         self.session_name.set(selected_session)
         print(f"Session selected: {selected_session}")
+        self.update_start_button_label()
 
     def create_new_session(self):
         # This method remains available but not triggered by UI anymore.
@@ -584,7 +607,7 @@ class ScreenshotApp:
             "detect_keyboard": self.detect_keyboard.get(),
             "movement_sensitivity": self.movement_sensitivity.get(),
             "enable_motion_detection": self.enable_motion_detection.get(),
-            "enable_logging": self.enable_logging.get()  # Save logging preference
+            "enable_logging": self.enable_logging.get()
             # session_name is intentionally not saved
         }
         try:
@@ -686,6 +709,14 @@ class ScreenshotApp:
         else:
             self.save_settings()
             self.root.destroy()
+
+    def on_session_name_change(self, event):
+        """Called on every keystroke in the session entry to update the start button label."""
+        session = self.session_name.get()
+        if session in self.sessions:
+            self.update_start_button_label()
+        else:
+            self.start_button.config(text="Start")
 
 def main():
     try:
