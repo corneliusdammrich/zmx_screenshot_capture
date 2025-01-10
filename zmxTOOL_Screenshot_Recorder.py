@@ -205,6 +205,26 @@ class ScreenshotApp:
         self.status_label = ttk.Label(status_frame, text="Status: Idle")
         self.status_label.pack(fill='x', padx=10, pady=5)
 
+        # New Group: Video Conversion
+        convert_frame = ttk.LabelFrame(self.root, text="Video Conversion")
+        convert_frame.pack(fill='x', padx=10, pady=5)
+
+        # Label to display frame count
+        self.frames_count_label = ttk.Label(convert_frame, text="Frames in session: 0")
+        self.frames_count_label.pack(side='left', padx=10, pady=5)
+
+        # FPS selector
+        fps_options = [12, 24, 25, 30, 60]
+        self.selected_fps = tk.IntVar(value=fps_options[0])
+        self.fps_selector = ttk.Combobox(convert_frame, textvariable=self.selected_fps,
+                                         values=fps_options, state='readonly', width=5)
+        self.fps_selector.pack(side='left', padx=(10,5))
+
+        # Convert button
+        self.convert_button = ttk.Button(convert_frame, text="Convert to video file",
+                                         command=self.convert_session_to_video)
+        self.convert_button.pack(side='left', padx=(10,5))
+
         # Start/Stop Buttons placed at bottom outside groups
         button_frame = ttk.Frame(self.root)
         button_frame.pack(fill='x', padx=10, pady=5)
@@ -369,11 +389,13 @@ class ScreenshotApp:
         else:
             self.session_name.set("")
         self.update_start_button_label()
+        self.update_frame_count()
 
     def on_session_select(self, value):
         self.session_name.set(value)
         print(f"Session selected: {value}")
         self.update_start_button_label()
+        self.update_frame_count()
 
     def create_new_session(self):
         session = self.session_name.get().strip()
@@ -588,6 +610,7 @@ class ScreenshotApp:
                 self.log_event("Error: Maximum screenshot limit reached.", level="ERROR")
                 self.stop_event.set()
             self.screenshot_label.config(text=f"Saved: {filename}")
+            self.update_frame_count()
         except Exception as e:
             self.queue_status(f"Error saving screenshot: {e}")
             self.log_event(f"Error saving screenshot: {e}", level="ERROR")
@@ -598,6 +621,59 @@ class ScreenshotApp:
 
     def update_status(self, message):
         self.status_label.config(text=f"Status: {message}")
+
+    def update_frame_count(self):
+        session = self.session_name.get()
+        save_dir = self.save_directory.get()
+        count = 0
+        if session and save_dir:
+            session_folder = os.path.join(save_dir, session)
+            if os.path.isdir(session_folder):
+                prefix = f"{session}_"
+                count = sum(1 for f in os.listdir(session_folder)
+                            if f.startswith(prefix) and f.lower().endswith((".jpg", ".jpeg")))
+        self.frames_count_label.config(text=f"Frames in session: {count}")
+
+    def convert_session_to_video(self):
+        session = self.session_name.get()
+        save_dir = self.save_directory.get()
+        if not session or not save_dir:
+            messagebox.showwarning("Error", "Please select a valid session and save directory.")
+            return
+
+        session_folder = os.path.join(save_dir, session)
+        if not os.path.isdir(session_folder):
+            messagebox.showwarning("Error", "Session folder does not exist.")
+            return
+
+        fps = self.selected_fps.get()
+        # Prompt user to choose the output file path
+        output_file = filedialog.asksaveasfilename(defaultextension=".mp4",
+                                                   initialdir=save_dir,
+                                                   title="Save video as",
+                                                   filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")])
+        if not output_file:
+            return
+
+        # Build the FFmpeg command
+        input_pattern = os.path.join(session_folder, f"{session}_%06d.jpeg")
+        cmd = [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", input_pattern,
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            output_file
+        ]
+
+        try:
+            import subprocess
+            subprocess.run(cmd, check=True)
+            messagebox.showinfo("Success", f"Video file created at {output_file}")
+            self.log_event(f"Converted session '{session}' to video file {output_file} at {fps}fps.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to convert video: {e}")
+            self.log_event(f"Error converting session '{session}' to video file: {e}", level="ERROR")
 
     def save_settings(self):
         settings = {
