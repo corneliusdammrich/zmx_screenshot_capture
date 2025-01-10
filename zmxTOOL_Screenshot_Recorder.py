@@ -177,8 +177,8 @@ class ScreenshotApp:
         self.sensitivity_slider.pack_forget()
         self.settings_widgets.extend([self.sensitivity_slider, self.sensitivity_value_label])
 
-        # Group 3: Status Functions
-        status_frame = ttk.LabelFrame(self.root, text="Status Functions")
+        # Group 3: Status
+        status_frame = ttk.LabelFrame(self.root, text="Status")
         status_frame.pack(fill='both', expand=True, padx=10, pady=5)
 
         # Progress Bar
@@ -213,17 +213,22 @@ class ScreenshotApp:
         self.frames_count_label = ttk.Label(convert_frame, text="Frames in session: 0")
         self.frames_count_label.pack(side='left', padx=10, pady=5)
 
-        # FPS selector
+        # FPS selector and label
         fps_options = [12, 24, 25, 30, 60]
         self.selected_fps = tk.IntVar(value=fps_options[0])
         self.fps_selector = ttk.Combobox(convert_frame, textvariable=self.selected_fps,
                                          values=fps_options, state='readonly', width=5)
         self.fps_selector.pack(side='left', padx=(10,5))
+        ttk.Label(convert_frame, text="FPS").pack(side='left')
 
         # Convert button
         self.convert_button = ttk.Button(convert_frame, text="Convert to video file",
                                          command=self.convert_session_to_video)
         self.convert_button.pack(side='left', padx=(10,5))
+
+        # Conversion status label for progress text
+        self.conversion_status = ttk.Label(convert_frame, text="")
+        self.conversion_status.pack(side='left', padx=(10,5))
 
         # Start/Stop Buttons placed at bottom outside groups
         button_frame = ttk.Frame(self.root)
@@ -332,9 +337,6 @@ class ScreenshotApp:
                 menu.add_command(label=monitor, command=lambda value=monitor: self.selected_monitor.set(value))
             if self.selected_monitor.get() not in monitor_list:
                 self.selected_monitor.set(monitor_list[0])
-
-    def on_format_change(self, *args):
-        pass
 
     def on_quality_change(self, value):
         self.jpeg_quality.set(int(float(value)))
@@ -663,17 +665,40 @@ class ScreenshotApp:
             "-i", input_pattern,
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
+            "-progress", "pipe:1",
             output_file
         ]
 
-        try:
-            import subprocess
-            subprocess.run(cmd, check=True)
-            messagebox.showinfo("Success", f"Video file created at {output_file}")
-            self.log_event(f"Converted session '{session}' to video file {output_file} at {fps}fps.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to convert video: {e}")
-            self.log_event(f"Error converting session '{session}' to video file: {e}", level="ERROR")
+        self.conversion_status.config(text="Starting conversion...")
+
+        def run_conversion():
+            try:
+                import subprocess
+                total_frames = len([f for f in os.listdir(session_folder) 
+                                    if f.startswith(f"{session}_") and f.lower().endswith((".jpg",".jpeg"))])
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+                while True:
+                    line = process.stdout.readline()
+                    if not line:
+                        break
+                    if line.startswith("frame="):
+                        try:
+                           frame_num = int(line.split("=")[1].strip())
+                           percent = (frame_num / total_frames) * 100 if total_frames > 0 else 0
+                           self.root.after(0, lambda p=percent: self.conversion_status.config(text=f"{p:.2f}% of Conversion Done"))
+                        except:
+                           pass
+                    if "progress=end" in line:
+                        break
+                process.wait()
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"Video file created at {output_file}"))
+                self.log_event(f"Converted session '{session}' to video file {output_file} at {fps}fps.")
+                self.root.after(0, lambda: self.conversion_status.config(text="Conversion Completed: 100%"))
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to convert video: {e}"))
+                self.log_event(f"Error converting session '{session}' to video file: {e}", level="ERROR")
+
+        threading.Thread(target=run_conversion, daemon=True).start()
 
     def save_settings(self):
         settings = {
