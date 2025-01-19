@@ -9,12 +9,12 @@ from tkinter import ttk, filedialog, messagebox
 import mss
 from PIL import Image, ImageChops
 from pynput import keyboard
-import mouse  # Standalone mouse library for mouse events
+import mouse
 import psutil
 import traceback
 
 try:
-    import win32gui  # For active window capture on Windows
+    import win32gui
 except ImportError:
     win32gui = None
 
@@ -36,7 +36,7 @@ class ScreenshotApp:
 
         # Initialize variables
         self.save_directory = tk.StringVar()
-        self.file_format = "jpg"  
+        self.file_format = "jpg"
         self.interval = tk.DoubleVar(value=5.0)
         self.jpeg_quality = tk.IntVar(value=5)
 
@@ -69,7 +69,6 @@ class ScreenshotApp:
         style.configure("orange.Horizontal.TProgressbar", foreground='orange', background='orange')
         style.configure("red.Horizontal.TProgressbar", foreground='red', background='red')
 
-        # Capture mode selection variable
         self.capture_mode = tk.StringVar(value="monitors")
 
         self.create_widgets()
@@ -492,10 +491,8 @@ class ScreenshotApp:
             with mss.mss() as sct:
                 current_date = datetime.now().strftime("%Y-%m-%d")
                 while not self.stop_event.is_set():
-                    # Determine capture region based on capture mode
                     if self.capture_mode.get() == "active_window" and win32gui:
                         hwnd = win32gui.GetForegroundWindow()
-                        # Skip capturing if the active window is the recorder itself
                         if hwnd == self.root.winfo_id():
                             time.sleep(self.interval.get())
                             continue
@@ -505,7 +502,6 @@ class ScreenshotApp:
                         height = bottom - top
                         region = {'left': left, 'top': top, 'width': width, 'height': height}
                     else:
-                        # Monitors mode
                         selected_monitors = [self.monitors[idx] for idx, var in self.monitor_vars.items() if var.get()]
                         if not selected_monitors:
                             time.sleep(self.interval.get())
@@ -519,7 +515,8 @@ class ScreenshotApp:
                         region = {'left': left, 'top': top, 'width': width, 'height': height}
 
                     try:
-                        sct_img = sct.grab(region)
+                        with mss.mss() as sct:
+                            sct_img = sct.grab(region)
                         img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
                     except Exception as e:
                         self.queue_status(f"Error capturing screen: {e}")
@@ -527,7 +524,6 @@ class ScreenshotApp:
                         self.stop_event.set()
                         break
 
-                    # Motion detection and screenshot saving logic (unchanged from previous snippet)
                     movement_detected = False
                     if not self.enable_motion_detection.get():
                         movement_detected = True
@@ -614,7 +610,7 @@ class ScreenshotApp:
 
     def save_screenshot(self, img, current_date, detection_type="unknown"):
         counter_str = f"{self.counter:06d}"
-        extension = "jpeg"  
+        extension = "jpeg"
         filename = f"{self.session_name.get()}_{counter_str}.{extension}"
         session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
         os.makedirs(session_folder, exist_ok=True)
@@ -680,7 +676,52 @@ class ScreenshotApp:
         if not output_file:
             return
 
-        input_pattern = os.path.join(session_folder, f"{session}_%06d.jpeg")
+        processed_dir = os.path.join(session_folder, "_processed_video")
+        os.makedirs(processed_dir, exist_ok=True)
+        target_width = 1920
+        target_height = 1080
+
+        files = sorted(
+            f for f in os.listdir(session_folder)
+            if f.lower().endswith((".jpg",".jpeg")) and f.startswith(f"{session}_")
+        )
+
+        if not files:
+            messagebox.showwarning("Warning", "No screenshot images found in the session folder.")
+            return
+
+        self.log_event(f"Found {len(files)} screenshots to process.", level="INFO")
+
+        for i, filename in enumerate(files, start=1):
+            filepath = os.path.join(session_folder, filename)
+            self.log_event(f"Processing file: {filename}", level="INFO")
+            try:
+                img = Image.open(filepath)
+                aspect_ratio = img.width / img.height
+                target_ratio = target_width / target_height
+                if aspect_ratio > target_ratio:
+                    new_width = target_width
+                    new_height = int(target_width / aspect_ratio)
+                else:
+                    new_height = target_height
+                    new_width = int(target_height * aspect_ratio)
+                img_resized = img.resize((new_width, new_height), resample=Image.LANCZOS)
+
+                new_img = Image.new("RGB", (target_width, target_height), (0,0,0))
+                x_offset = (target_width - new_width) // 2
+                y_offset = (target_height - new_height) // 2
+                new_img.paste(img_resized, (x_offset, y_offset))
+
+                new_filename = f"{session}_{i:06d}.jpeg"
+                new_filepath = os.path.join(processed_dir, new_filename)
+                new_img.save(new_filepath, "JPEG", quality=95)
+            except Exception as e:
+                self.log_event(f"Error processing {filename}: {e}", level="ERROR")
+
+        processed_files = os.listdir(processed_dir)
+        self.log_event(f"Processed {len(processed_files)} images for video conversion.", level="INFO")
+
+        input_pattern = os.path.join(processed_dir, f"{session}_%06d.jpeg")
         cmd = [
             "ffmpeg", "-y",
             "-framerate", str(fps),
@@ -696,8 +737,12 @@ class ScreenshotApp:
         def run_conversion():
             try:
                 import subprocess
-                total_frames = len([f for f in os.listdir(session_folder) 
-                                    if f.startswith(f"{session}_") and f.lower().endswith((".jpg",".jpeg"))])
+                total_frames = len([
+                    f for f in os.listdir(processed_dir)
+                    if f.startswith(f"{session}_") and f.lower().endswith((".jpg",".jpeg"))
+                ])
+                self.log_event(f"Starting FFmpeg conversion with {total_frames} frames.", level="INFO")
+                self.log_event(f"Executing command: {' '.join(cmd)}", level="INFO")
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
                 while True:
                     line = process.stdout.readline()
@@ -713,14 +758,22 @@ class ScreenshotApp:
                     if "progress=end" in line:
                         break
                 process.wait()
-                self.root.after(0, lambda: messagebox.showinfo("Success", f"Video file created at {output_file}"))
-                self.log_event(f"Converted session '{session}' to video file {output_file} at {fps}fps.")
-                self.root.after(0, lambda: self.conversion_status.config(text="Conversion Completed: 100%"))
+                if process.returncode != 0:
+                    error_output = process.stdout.read()
+                    self.log_event(f"FFmpeg failed with return code {process.returncode}. Output: {error_output}", level="ERROR")
+                    self.root.after(0, lambda: messagebox.showerror("Error", "FFmpeg conversion failed."))
+                else:
+                    self.root.after(0, lambda: messagebox.showinfo("Success", f"Video file created at {output_file}"))
+                    self.log_event(f"Converted session '{session}' to video file {output_file} at {fps}fps.", level="INFO")
+                    self.root.after(0, lambda: self.conversion_status.config(text="Conversion Completed: 100%"))
             except Exception as e:
                 self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to convert video: {e}"))
                 self.log_event(f"Error converting session '{session}' to video file: {e}", level="ERROR")
 
         threading.Thread(target=run_conversion, daemon=True).start()
+
+    # ... Remaining methods: save_settings, load_settings, start_input_listeners, stop_input_listeners,
+    # on_input_event, on_mouse_event, monitor_cpu, update_cpu_bar, on_close ...
 
     def save_settings(self):
         settings = {
@@ -753,7 +806,7 @@ class ScreenshotApp:
                 self.movement_sensitivity.set(settings.get("movement_sensitivity", 2))
                 self.enable_motion_detection.set(settings.get("enable_motion_detection", True))
                 self.enable_logging.set(settings.get("enable_logging", True))
-                self.session_name.set("")  
+                self.session_name.set("")
                 self.on_mode_change()
                 self.on_detection_toggle()
                 self.load_sessions()
