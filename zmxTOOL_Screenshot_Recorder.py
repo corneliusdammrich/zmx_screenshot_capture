@@ -36,7 +36,7 @@ class ScreenshotApp:
 
         # Initialize variables
         self.save_directory = tk.StringVar()
-        self.file_format = "jpg"
+        self.file_format = "jpg"  
         self.interval = tk.DoubleVar(value=5.0)
         self.jpeg_quality = tk.IntVar(value=5)
 
@@ -70,6 +70,7 @@ class ScreenshotApp:
         style.configure("red.Horizontal.TProgressbar", foreground='red', background='red')
 
         self.capture_mode = tk.StringVar(value="monitors")
+        self.selected_resolution = tk.StringVar(value="1920x1080")
 
         self.create_widgets()
         self.load_settings()
@@ -229,6 +230,12 @@ class ScreenshotApp:
                                          values=fps_options, state='readonly', width=5)
         self.fps_selector.pack(side='left', padx=(10,5))
         ttk.Label(convert_frame, text="FPS").pack(side='left')
+
+        resolution_options = ["1920x1080", "2560x1440", "3840x2160"]
+        self.resolution_selector = ttk.Combobox(convert_frame, textvariable=self.selected_resolution,
+                                                values=resolution_options, state='readonly', width=10)
+        self.resolution_selector.pack(side='left', padx=(10,5))
+        ttk.Label(convert_frame, text="Resolution").pack(side='left')
 
         self.convert_button = ttk.Button(convert_frame, text="Convert to video file",
                                          command=self.convert_session_to_video)
@@ -515,8 +522,7 @@ class ScreenshotApp:
                         region = {'left': left, 'top': top, 'width': width, 'height': height}
 
                     try:
-                        with mss.mss() as sct:
-                            sct_img = sct.grab(region)
+                        sct_img = sct.grab(region)
                         img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
                     except Exception as e:
                         self.queue_status(f"Error capturing screen: {e}")
@@ -676,10 +682,12 @@ class ScreenshotApp:
         if not output_file:
             return
 
+        # Use selected resolution
+        resolution = self.selected_resolution.get()
+        target_width, target_height = map(int, resolution.split('x'))
+
         processed_dir = os.path.join(session_folder, "_processed_video")
         os.makedirs(processed_dir, exist_ok=True)
-        target_width = 1920
-        target_height = 1080
 
         files = sorted(
             f for f in os.listdir(session_folder)
@@ -771,9 +779,6 @@ class ScreenshotApp:
                 self.log_event(f"Error converting session '{session}' to video file: {e}", level="ERROR")
 
         threading.Thread(target=run_conversion, daemon=True).start()
-
-    # ... Remaining methods: save_settings, load_settings, start_input_listeners, stop_input_listeners,
-    # on_input_event, on_mouse_event, monitor_cpu, update_cpu_bar, on_close ...
 
     def save_settings(self):
         settings = {
