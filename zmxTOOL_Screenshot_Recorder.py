@@ -16,9 +16,6 @@ import traceback
 MARKER_FILENAME = ".zmxTOOL_session"  # Hidden marker file for valid sessions
 
 def resource_path(relative_path):
-    """
-    Get absolute path to resource, works for dev and for PyInstaller.
-    """
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -59,7 +56,6 @@ class ScreenshotApp:
         self.input_lock = threading.Lock()
 
         self.keyboard_listener = None
-        # No separate mouse listener needed with the 'mouse' library.
 
         self.settings_file = resource_path("settings.json")
 
@@ -73,7 +69,6 @@ class ScreenshotApp:
         self.load_settings()
         self.populate_monitors()
 
-        # Flag to track mouse button state
         self.mouse_pressed = False
 
     def create_widgets(self):
@@ -84,7 +79,6 @@ class ScreenshotApp:
         file_frame = ttk.LabelFrame(self.root, text="File Settings")
         file_frame.pack(fill='x', padx=10, pady=5)
 
-        # Save Directory
         dir_frame = ttk.Frame(file_frame)
         dir_frame.pack(fill='x', **padding)
         ttk.Label(dir_frame, text="Save Directory:").pack(side='left')
@@ -95,7 +89,6 @@ class ScreenshotApp:
         self.browse_button.pack(side='left')
         self.settings_widgets.append(self.browse_button)
 
-        # JPEG Quality Slider
         self.jpeg_quality_frame = ttk.Frame(file_frame)
         self.jpeg_quality_frame.pack(fill='x', padx=10, pady=5)
         ttk.Label(self.jpeg_quality_frame, text="JPEG Quality:").pack(side='left')
@@ -106,7 +99,6 @@ class ScreenshotApp:
         self.jpeg_quality_value_label.pack(side='left', padx=(5,0))
         self.settings_widgets.extend([self.jpeg_quality_slider, self.jpeg_quality_value_label])
 
-        # Interval
         interval_frame = ttk.Frame(file_frame)
         interval_frame.pack(fill='x', **padding)
         ttk.Label(interval_frame, text="Interval (seconds):").pack(side='left')
@@ -116,7 +108,6 @@ class ScreenshotApp:
         self.interval_spinbox.set(5.0)
         self.settings_widgets.append(self.interval_spinbox)
 
-        # Session Management
         session_frame = ttk.Frame(file_frame)
         session_frame.pack(fill='x', **padding)
         ttk.Label(session_frame, text="Session:").pack(side='left')
@@ -128,7 +119,6 @@ class ScreenshotApp:
         self.new_session_entry.bind("<KeyRelease>", self.on_session_name_change)
         self.settings_widgets.append(self.new_session_entry)
 
-        # Monitor Selection
         monitor_frame = ttk.Frame(file_frame)
         monitor_frame.pack(fill='x', **padding)
         ttk.Label(monitor_frame, text="Select Monitor:").pack(side='left')
@@ -136,7 +126,6 @@ class ScreenshotApp:
         self.monitor_menu.pack(side='left', padx=(5,5))
         self.settings_widgets.append(self.monitor_menu)
 
-        # Logging Toggle
         log_frame = ttk.Frame(file_frame)
         log_frame.pack(fill='x', **padding)
         self.logging_check = ttk.Checkbutton(log_frame, text="Enable Logging", variable=self.enable_logging)
@@ -147,68 +136,74 @@ class ScreenshotApp:
         detection_frame = ttk.LabelFrame(self.root, text="Detection Settings")
         detection_frame.pack(fill='x', padx=10, pady=5)
 
-        # Movement Detection Mode
-        mode_frame = ttk.Frame(detection_frame)
-        mode_frame.pack(fill='x', **padding)
-        ttk.Label(mode_frame, text="Movement Detection Mode:").pack(side='left')
-        mode_options = [("Image-Based", "image"), ("Input-Based", "input"), ("Combined", "combined")]
-        self.mode_radiobuttons = []
-        for text, mode in mode_options:
-            rb = ttk.Radiobutton(mode_frame, text=text, variable=self.movement_detection_mode, value=mode,
-                                 command=self.on_mode_change)
-            rb.pack(side='left', padx=(10,0))
-            self.mode_radiobuttons.append(rb)
-            self.settings_widgets.append(rb)
-
         # Motion Detection Toggle
         detection_toggle_frame = ttk.Frame(detection_frame)
         detection_toggle_frame.pack(fill='x', **padding)
         ttk.Label(detection_toggle_frame, text="Motion Detection:").pack(side='left')
-        self.motion_detection_check = ttk.Checkbutton(detection_toggle_frame, text="Enable", variable=self.enable_motion_detection,
-                                                      command=self.on_detection_toggle)
+        self.motion_detection_check = ttk.Checkbutton(
+            detection_toggle_frame, text="Enable",
+            variable=self.enable_motion_detection, command=self.on_detection_toggle
+        )
         self.motion_detection_check.pack(side='left', padx=(5,0))
         self.settings_widgets.append(self.motion_detection_check)
 
-        # Movement Sensitivity Slider
-        sensitivity_frame = ttk.Frame(detection_frame)
-        sensitivity_frame.pack(fill='x', **padding)
-        ttk.Label(sensitivity_frame, text="Movement Sensitivity (%):").pack(side='left')
+        # Movement Detection Mode Frame (initially visible if motion detection enabled)
+        self.mode_frame = ttk.Frame(detection_frame)
+        self.mode_frame.pack(fill='x', **padding)
+        ttk.Label(self.mode_frame, text="Movement Detection Mode:").pack(side='left')
+        mode_options = [("Image-Based", "image"), ("Input-Based", "input"), ("Combined", "combined")]
+        self.mode_radiobuttons = []
+        for text, mode in mode_options:
+            rb = ttk.Radiobutton(
+                self.mode_frame, text=text, variable=self.movement_detection_mode,
+                value=mode, command=self.on_mode_change
+            )
+            rb.pack(side='left', padx=(10,0))
+            self.mode_radiobuttons.append(rb)
+            self.settings_widgets.append(rb)
+
+        # Movement Sensitivity Frame
+        self.sensitivity_frame = ttk.Frame(detection_frame)
+        self.sensitivity_frame.pack(fill='x', **padding)
+        ttk.Label(self.sensitivity_frame, text="Movement Sensitivity (%):").pack(side='left')
         self.sensitivity_slider = ttk.Scale(
-            sensitivity_frame, from_=1, to=100, orient='horizontal',
+            self.sensitivity_frame, from_=1, to=100, orient='horizontal',
             variable=self.movement_sensitivity, command=self.on_sensitivity_change, length=200
         )
         self.sensitivity_slider.pack(side='left', padx=(5,5), fill='x', expand=True)
-        self.sensitivity_value_label = ttk.Label(sensitivity_frame, text=f"{self.movement_sensitivity.get()}%")
+        self.sensitivity_value_label = ttk.Label(
+            self.sensitivity_frame, text=f"{self.movement_sensitivity.get()}%"
+        )
         self.sensitivity_value_label.pack(side='left', padx=(5,0))
         self.sensitivity_slider.set(2)
-        self.sensitivity_slider.pack_forget()
+        self.sensitivity_slider.pack_forget()  # Hide sensitivity slider initially
         self.settings_widgets.extend([self.sensitivity_slider, self.sensitivity_value_label])
 
         # Group 3: Status
         status_frame = ttk.LabelFrame(self.root, text="Status")
         status_frame.pack(fill='both', expand=True, padx=10, pady=5)
 
-        # Progress Bar
         progress_frame = ttk.Frame(status_frame)
         progress_frame.pack(fill='x', **padding)
         ttk.Label(progress_frame, text="Activity:").pack(side='left')
         self.progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate')
         self.progress_bar.pack(side='left', fill='x', expand=True, padx=(5,0))
 
-        # CPU Utilization
         cpu_frame = ttk.LabelFrame(status_frame, text="CPU Utilization")
         cpu_frame.pack(fill='x', padx=10, pady=10)
         self.cpu_progress = ttk.Progressbar(cpu_frame, orient='horizontal', length=300,
                                             mode='determinate', maximum=100, style="green.Horizontal.TProgressbar")
         self.cpu_progress.pack(padx=10, pady=10)
 
-        # Status Labels
         self.screenshot_label = ttk.Label(status_frame, text="Current Screenshot: None")
         self.screenshot_label.pack(fill='x', padx=10, pady=5)
+
+        # Movement and Input Status Labels (will be hidden if motion detection disabled)
         self.movement_status_label = ttk.Label(status_frame, text="Movement: None", foreground="red")
         self.movement_status_label.pack(fill='x', padx=10, pady=5)
         self.input_status_label = ttk.Label(status_frame, text="Input Detection: Active", foreground="green")
         self.input_status_label.pack(fill='x', padx=10, pady=5)
+
         self.status_label = ttk.Label(status_frame, text="Status: Idle")
         self.status_label.pack(fill='x', padx=10, pady=5)
 
@@ -216,11 +211,9 @@ class ScreenshotApp:
         convert_frame = ttk.LabelFrame(self.root, text="Video Conversion")
         convert_frame.pack(fill='x', padx=10, pady=5)
 
-        # Label to display frame count
         self.frames_count_label = ttk.Label(convert_frame, text="Frames in session: 0")
         self.frames_count_label.pack(side='left', padx=10, pady=5)
 
-        # FPS selector and label
         fps_options = [12, 24, 25, 30, 60]
         self.selected_fps = tk.IntVar(value=fps_options[0])
         self.fps_selector = ttk.Combobox(convert_frame, textvariable=self.selected_fps,
@@ -228,16 +221,13 @@ class ScreenshotApp:
         self.fps_selector.pack(side='left', padx=(10,5))
         ttk.Label(convert_frame, text="FPS").pack(side='left')
 
-        # Convert button
         self.convert_button = ttk.Button(convert_frame, text="Convert to video file",
                                          command=self.convert_session_to_video)
         self.convert_button.pack(side='left', padx=(10,5))
 
-        # Conversion status label for progress text
         self.conversion_status = ttk.Label(convert_frame, text="")
         self.conversion_status.pack(side='left', padx=(10,5))
 
-        # Start/Stop Buttons placed at bottom outside groups
         button_frame = ttk.Frame(self.root)
         button_frame.pack(fill='x', padx=10, pady=5)
         self.start_button = ttk.Button(button_frame, text="Start", command=self.start_capturing)
@@ -366,9 +356,19 @@ class ScreenshotApp:
         self.log_event(f"Motion detection {status}.")
         if state:
             self.input_status_label.config(text="Input Detection: Active", foreground="green")
+            # Show mode and sensitivity frames, show status labels
+            self.mode_frame.pack(fill='x', padx=10, pady=5)
+            self.sensitivity_frame.pack(fill='x', padx=10, pady=5)
+            self.movement_status_label.pack(fill='x', padx=10, pady=5)
+            self.input_status_label.pack(fill='x', padx=10, pady=5)
         else:
             self.input_status_label.config(text="Input Detection: Inactive", foreground="red")
             self.movement_status_label.config(text="Movement: None", foreground="red")
+            # Hide mode and sensitivity frames, hide status labels
+            self.mode_frame.pack_forget()
+            self.sensitivity_frame.pack_forget()
+            self.movement_status_label.pack_forget()
+            self.input_status_label.pack_forget()
 
     def load_sessions(self):
         if self.save_directory.get() and os.path.isdir(self.save_directory.get()):
@@ -596,7 +596,7 @@ class ScreenshotApp:
 
     def save_screenshot(self, img, current_date, detection_type="unknown"):
         counter_str = f"{self.counter:06d}"
-        extension = "jpeg"  
+        extension = "jpeg"
         filename = f"{self.session_name.get()}_{counter_str}.{extension}"
         session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
         os.makedirs(session_folder, exist_ok=True)
@@ -794,7 +794,6 @@ class ScreenshotApp:
             self.log_event(f"Error in keyboard event callback: {tb}", level="ERROR")
 
     def on_mouse_event(self, event):
-        # Safely handle different types of mouse events
         try:
             if hasattr(event, 'event_type') and event.event_type == 'down':
                 if not self.mouse_pressed:
@@ -808,7 +807,6 @@ class ScreenshotApp:
                     self.mouse_pressed = False
                     self.log_event(f"Mouse button {event.button} released at ({event.x}, {event.y})", level="INFO")
         except AttributeError:
-            # Ignore events that do not have 'event_type'
             pass
         except Exception as e:
             tb = traceback.format_exc()
