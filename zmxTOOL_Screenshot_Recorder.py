@@ -9,6 +9,7 @@ from tkinter import ttk, filedialog, messagebox
 import mss
 from PIL import Image, ImageChops
 from pynput import keyboard
+import mouse  # Standalone mouse library for mouse events
 import psutil
 import traceback
 
@@ -33,7 +34,7 @@ class ScreenshotApp:
 
         # Initialize variables
         self.save_directory = tk.StringVar()
-        self.file_format = "jpg"  # Fixed to JPEG
+        self.file_format = "jpg"  
         self.interval = tk.DoubleVar(value=5.0)
         self.selected_monitor = tk.StringVar()
         self.jpeg_quality = tk.IntVar(value=5)
@@ -43,7 +44,7 @@ class ScreenshotApp:
         self.movement_sensitivity = tk.IntVar(value=2)
         self.enable_motion_detection = tk.BooleanVar(value=True)
 
-        self.enable_logging = tk.BooleanVar(value=True)  # Logging toggle
+        self.enable_logging = tk.BooleanVar(value=True)
         self.session_name = tk.StringVar(value="")
         self.sessions = []
 
@@ -57,6 +58,9 @@ class ScreenshotApp:
         self.input_activity = False
         self.input_lock = threading.Lock()
 
+        self.keyboard_listener = None
+        # No separate mouse listener needed with the 'mouse' library.
+
         self.settings_file = resource_path("settings.json")
 
         style = ttk.Style()
@@ -68,6 +72,9 @@ class ScreenshotApp:
         self.create_widgets()
         self.load_settings()
         self.populate_monitors()
+
+        # Flag to track mouse button state
+        self.mouse_pressed = False
 
     def create_widgets(self):
         padding = {'padx': 10, 'pady': 5}
@@ -205,7 +212,7 @@ class ScreenshotApp:
         self.status_label = ttk.Label(status_frame, text="Status: Idle")
         self.status_label.pack(fill='x', padx=10, pady=5)
 
-        # New Group: Video Conversion
+        # Group 4: Video Conversion
         convert_frame = ttk.LabelFrame(self.root, text="Video Conversion")
         convert_frame.pack(fill='x', padx=10, pady=5)
 
@@ -468,7 +475,6 @@ class ScreenshotApp:
             self.log_event("Stopped screenshot capture.")
             self.stop_input_listeners()
             self.save_settings()
-            # Refresh session list after stopping recording
             self.load_sessions()
             self.update_session_dropdown()
 
@@ -590,7 +596,7 @@ class ScreenshotApp:
 
     def save_screenshot(self, img, current_date, detection_type="unknown"):
         counter_str = f"{self.counter:06d}"
-        extension = "jpeg"  # Fixed to JPEG
+        extension = "jpeg"  
         filename = f"{self.session_name.get()}_{counter_str}.{extension}"
         session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
         os.makedirs(session_folder, exist_ok=True)
@@ -598,7 +604,7 @@ class ScreenshotApp:
 
         try:
             self.screenshot_label.config(text=f"Saving: {filename}")
-            img = img.convert("RGB")  # Ensure image is in RGB mode for JPEG
+            img = img.convert("RGB")
             if self.jpeg_quality.get() == 10:
                 pillow_quality = 95
             else:
@@ -649,7 +655,6 @@ class ScreenshotApp:
             return
 
         fps = self.selected_fps.get()
-        # Prompt user to choose the output file path
         output_file = filedialog.asksaveasfilename(defaultextension=".mp4",
                                                    initialdir=save_dir,
                                                    title="Save video as",
@@ -657,7 +662,6 @@ class ScreenshotApp:
         if not output_file:
             return
 
-        # Build the FFmpeg command
         input_pattern = os.path.join(session_folder, f"{session}_%06d.jpeg")
         cmd = [
             "ffmpeg", "-y",
@@ -683,11 +687,11 @@ class ScreenshotApp:
                         break
                     if line.startswith("frame="):
                         try:
-                           frame_num = int(line.split("=")[1].strip())
-                           percent = (frame_num / total_frames) * 100 if total_frames > 0 else 0
-                           self.root.after(0, lambda p=percent: self.conversion_status.config(text=f"{p:.2f}% of Conversion Done"))
+                            frame_num = int(line.split("=")[1].strip())
+                            percent = (frame_num / total_frames) * 100 if total_frames > 0 else 0
+                            self.root.after(0, lambda p=percent: self.conversion_status.config(text=f"{p:.2f}% of Conversion Done"))
                         except:
-                           pass
+                            pass
                     if "progress=end" in line:
                         break
                 process.wait()
@@ -733,7 +737,7 @@ class ScreenshotApp:
                 self.movement_sensitivity.set(settings.get("movement_sensitivity", 2))
                 self.enable_motion_detection.set(settings.get("enable_motion_detection", True))
                 self.enable_logging.set(settings.get("enable_logging", True))
-                self.session_name.set("")  # Do not restore session from settings
+                self.session_name.set("")  
                 self.on_mode_change()
                 self.on_detection_toggle()
                 self.load_sessions()
@@ -745,12 +749,19 @@ class ScreenshotApp:
 
     def start_input_listeners(self):
         try:
-            if self.detect_keyboard.get() and self.enable_motion_detection.get():
-                self.keyboard_listener = keyboard.Listener(on_press=self.on_input_event)
-                self.keyboard_listener.start()
-                self.log_event("Keyboard listener started.", level="INFO")
+            if self.enable_motion_detection.get():
+                if self.detect_keyboard.get():
+                    self.keyboard_listener = keyboard.Listener(on_press=self.on_input_event)
+                    self.keyboard_listener.start()
+                else:
+                    self.keyboard_listener = None
+
+                mouse.hook(self.on_mouse_event)
+
+                self.log_event("Keyboard and mouse listeners started.", level="INFO")
             else:
                 self.keyboard_listener = None
+
             if self.detect_keyboard.get() and self.enable_motion_detection.get():
                 self.input_status_label.config(text="Input Detection: Active", foreground="green")
             else:
@@ -762,10 +773,11 @@ class ScreenshotApp:
 
     def stop_input_listeners(self):
         try:
-            if hasattr(self, 'keyboard_listener') and self.keyboard_listener is not None:
+            if self.keyboard_listener is not None:
                 self.keyboard_listener.stop()
                 self.keyboard_listener = None
                 self.log_event("Keyboard listener stopped.", level="INFO")
+            mouse.unhook(self.on_mouse_event)
             self.input_status_label.config(text="Input Detection: Inactive", foreground="red")
         except Exception as e:
             tb = traceback.format_exc()
@@ -775,11 +787,32 @@ class ScreenshotApp:
         try:
             with self.input_lock:
                 self.input_activity = True
-            self.log_event(f"Input activity detected: {key}", level="INFO")
+            self.log_event(f"Keyboard activity detected: {key}", level="INFO")
             self.movement_status_label.config(text="Movement: Detected", foreground="green")
         except Exception as e:
             tb = traceback.format_exc()
-            self.log_event(f"Error in input event callback: {tb}", level="ERROR")
+            self.log_event(f"Error in keyboard event callback: {tb}", level="ERROR")
+
+    def on_mouse_event(self, event):
+        # Safely handle different types of mouse events
+        try:
+            if hasattr(event, 'event_type') and event.event_type == 'down':
+                if not self.mouse_pressed:
+                    self.mouse_pressed = True
+                    with self.input_lock:
+                        self.input_activity = True
+                    self.log_event(f"Mouse button {event.button} pressed at ({event.x}, {event.y})", level="INFO")
+                    self.movement_status_label.config(text="Movement: Detected", foreground="green")
+            elif hasattr(event, 'event_type') and event.event_type == 'up':
+                if self.mouse_pressed:
+                    self.mouse_pressed = False
+                    self.log_event(f"Mouse button {event.button} released at ({event.x}, {event.y})", level="INFO")
+        except AttributeError:
+            # Ignore events that do not have 'event_type'
+            pass
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.log_event(f"Error in mouse event callback: {tb}", level="ERROR")
 
     def monitor_cpu(self):
         if not self.is_running:
