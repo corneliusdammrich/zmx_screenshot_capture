@@ -13,7 +13,12 @@ import mouse  # Standalone mouse library for mouse events
 import psutil
 import traceback
 
-MARKER_FILENAME = ".zmxTOOL_session"  # Hidden marker file for valid sessions
+try:
+    import win32gui  # For active window capture on Windows
+except ImportError:
+    win32gui = None
+
+MARKER_FILENAME = ".zmxTOOL_session"
 
 def resource_path(relative_path):
     try:
@@ -33,7 +38,6 @@ class ScreenshotApp:
         self.save_directory = tk.StringVar()
         self.file_format = "jpg"  
         self.interval = tk.DoubleVar(value=5.0)
-        self.selected_monitor = tk.StringVar()
         self.jpeg_quality = tk.IntVar(value=5)
 
         self.movement_detection_mode = tk.StringVar(value="image")
@@ -64,6 +68,9 @@ class ScreenshotApp:
         style.configure("green.Horizontal.TProgressbar", foreground='green', background='green')
         style.configure("orange.Horizontal.TProgressbar", foreground='orange', background='orange')
         style.configure("red.Horizontal.TProgressbar", foreground='red', background='red')
+
+        # Capture mode selection variable
+        self.capture_mode = tk.StringVar(value="monitors")
 
         self.create_widgets()
         self.load_settings()
@@ -119,25 +126,31 @@ class ScreenshotApp:
         self.new_session_entry.bind("<KeyRelease>", self.on_session_name_change)
         self.settings_widgets.append(self.new_session_entry)
 
-        monitor_frame = ttk.Frame(file_frame)
-        monitor_frame.pack(fill='x', **padding)
-        ttk.Label(monitor_frame, text="Select Monitor:").pack(side='left')
-        self.monitor_menu = ttk.OptionMenu(monitor_frame, self.selected_monitor, "")
-        self.monitor_menu.pack(side='left', padx=(5,5))
-        self.settings_widgets.append(self.monitor_menu)
-
         log_frame = ttk.Frame(file_frame)
         log_frame.pack(fill='x', **padding)
         self.logging_check = ttk.Checkbutton(log_frame, text="Enable Logging", variable=self.enable_logging)
         self.logging_check.pack(side='left')
         self.settings_widgets.append(self.logging_check)
 
-        # Group 2: Detection Settings
-        detection_frame = ttk.LabelFrame(self.root, text="Detection Settings")
-        detection_frame.pack(fill='x', padx=10, pady=5)
+        # Group: Capture Mode
+        capture_mode_frame = ttk.LabelFrame(self.root, text="Capture Mode")
+        capture_mode_frame.pack(fill='x', padx=10, pady=5)
 
-        # Motion Detection Toggle
-        detection_toggle_frame = ttk.Frame(detection_frame)
+        ttk.Label(capture_mode_frame, text="Select Capture Mode:").pack(side='left', padx=(5,5))
+        rb_monitors = ttk.Radiobutton(capture_mode_frame, text="Monitors", variable=self.capture_mode, value="monitors", command=self.on_capture_mode_change)
+        rb_monitors.pack(side='left', padx=(5,5))
+        rb_active = ttk.Radiobutton(capture_mode_frame, text="Active Window", variable=self.capture_mode, value="active_window", command=self.on_capture_mode_change)
+        rb_active.pack(side='left', padx=(5,5))
+
+        # Monitors selection frame
+        self.monitors_frame = ttk.LabelFrame(self.root, text="Select Monitors")
+        self.monitors_frame.pack(fill='x', padx=10, pady=5)
+
+        # Group 2: Detection Settings
+        self.detection_frame = ttk.LabelFrame(self.root, text="Detection Settings")
+        self.detection_frame.pack(fill='x', padx=10, pady=5)
+
+        detection_toggle_frame = ttk.Frame(self.detection_frame)
         detection_toggle_frame.pack(fill='x', **padding)
         ttk.Label(detection_toggle_frame, text="Motion Detection:").pack(side='left')
         self.motion_detection_check = ttk.Checkbutton(
@@ -147,8 +160,7 @@ class ScreenshotApp:
         self.motion_detection_check.pack(side='left', padx=(5,0))
         self.settings_widgets.append(self.motion_detection_check)
 
-        # Movement Detection Mode Frame (initially visible if motion detection enabled)
-        self.mode_frame = ttk.Frame(detection_frame)
+        self.mode_frame = ttk.Frame(self.detection_frame)
         self.mode_frame.pack(fill='x', **padding)
         ttk.Label(self.mode_frame, text="Movement Detection Mode:").pack(side='left')
         mode_options = [("Image-Based", "image"), ("Input-Based", "input"), ("Combined", "combined")]
@@ -162,8 +174,7 @@ class ScreenshotApp:
             self.mode_radiobuttons.append(rb)
             self.settings_widgets.append(rb)
 
-        # Movement Sensitivity Frame
-        self.sensitivity_frame = ttk.Frame(detection_frame)
+        self.sensitivity_frame = ttk.Frame(self.detection_frame)
         self.sensitivity_frame.pack(fill='x', **padding)
         ttk.Label(self.sensitivity_frame, text="Movement Sensitivity (%):").pack(side='left')
         self.sensitivity_slider = ttk.Scale(
@@ -176,7 +187,7 @@ class ScreenshotApp:
         )
         self.sensitivity_value_label.pack(side='left', padx=(5,0))
         self.sensitivity_slider.set(2)
-        self.sensitivity_slider.pack_forget()  # Hide sensitivity slider initially
+        self.sensitivity_slider.pack_forget()
         self.settings_widgets.extend([self.sensitivity_slider, self.sensitivity_value_label])
 
         # Group 3: Status
@@ -198,7 +209,6 @@ class ScreenshotApp:
         self.screenshot_label = ttk.Label(status_frame, text="Current Screenshot: None")
         self.screenshot_label.pack(fill='x', padx=10, pady=5)
 
-        # Movement and Input Status Labels (will be hidden if motion detection disabled)
         self.movement_status_label = ttk.Label(status_frame, text="Movement: None", foreground="red")
         self.movement_status_label.pack(fill='x', padx=10, pady=5)
         self.input_status_label = ttk.Label(status_frame, text="Input Detection: Active", foreground="green")
@@ -234,6 +244,12 @@ class ScreenshotApp:
         self.start_button.pack(side='left', expand=True, fill='x', padx=(0,5))
         self.stop_button = ttk.Button(button_frame, text="Stop", command=self.stop_capturing, state='disabled')
         self.stop_button.pack(side='left', expand=True, fill='x', padx=(5,0))
+
+    def on_capture_mode_change(self):
+        if self.capture_mode.get() == "monitors":
+            self.monitors_frame.pack(fill='x', padx=10, pady=5, before=self.detection_frame)
+        else:
+            self.monitors_frame.pack_forget()
 
     def on_session_name_change(self, event):
         self.update_start_button_label()
@@ -320,20 +336,19 @@ class ScreenshotApp:
     def populate_monitors(self):
         with mss.mss() as sct:
             monitors = sct.monitors
-            monitor_list = []
+            self.monitors = monitors
+            for child in self.monitors_frame.winfo_children():
+                child.destroy()
+            self.monitor_vars = {}
             for idx, monitor in enumerate(monitors[1:], start=1):
-                name = f"Monitor {idx}: {monitor['width']}x{monitor['height']} @ {monitor['left']},{monitor['top']}"
-                monitor_list.append(name)
-            if not monitor_list:
-                messagebox.showerror("Error", "No monitors detected.")
-                self.root.destroy()
-                return
-            menu = self.monitor_menu["menu"]
-            menu.delete(0, "end")
-            for monitor in monitor_list:
-                menu.add_command(label=monitor, command=lambda value=monitor: self.selected_monitor.set(value))
-            if self.selected_monitor.get() not in monitor_list:
-                self.selected_monitor.set(monitor_list[0])
+                var = tk.BooleanVar(value=False)
+                self.monitor_vars[idx] = var
+                cb = ttk.Checkbutton(
+                    self.monitors_frame,
+                    text=f"Monitor {idx}: {monitor['width']}x{monitor['height']} @ {monitor['left']},{monitor['top']}",
+                    variable=var
+                )
+                cb.pack(anchor='w')
 
     def on_quality_change(self, value):
         self.jpeg_quality.set(int(float(value)))
@@ -356,7 +371,6 @@ class ScreenshotApp:
         self.log_event(f"Motion detection {status}.")
         if state:
             self.input_status_label.config(text="Input Detection: Active", foreground="green")
-            # Show mode and sensitivity frames, show status labels
             self.mode_frame.pack(fill='x', padx=10, pady=5)
             self.sensitivity_frame.pack(fill='x', padx=10, pady=5)
             self.movement_status_label.pack(fill='x', padx=10, pady=5)
@@ -364,7 +378,6 @@ class ScreenshotApp:
         else:
             self.input_status_label.config(text="Input Detection: Inactive", foreground="red")
             self.movement_status_label.config(text="Movement: None", foreground="red")
-            # Hide mode and sensitivity frames, hide status labels
             self.mode_frame.pack_forget()
             self.sensitivity_frame.pack_forget()
             self.movement_status_label.pack_forget()
@@ -441,9 +454,6 @@ class ScreenshotApp:
         except:
             messagebox.showwarning("Input Error", "Interval must be a positive number.")
             return
-        if not self.selected_monitor.get():
-            messagebox.showwarning("Input Error", "Please select a monitor.")
-            return
 
         self.initialize_logging_and_counter()
         self.log_event("Starting screenshot capture.")
@@ -454,8 +464,7 @@ class ScreenshotApp:
         self.stop_event.clear()
         self.progress_bar.start(10)
         self.update_status("Running")
-        mode = self.movement_detection_mode.get()
-        if mode in ["image", "combined"]:
+        if self.movement_detection_mode.get() in ["image", "combined"]:
             self.previous_image = None
         self.start_input_listeners()
         self.thread = threading.Thread(target=self.capture_screenshots, daemon=True)
@@ -480,28 +489,37 @@ class ScreenshotApp:
 
     def capture_screenshots(self):
         try:
-            monitor_str = self.selected_monitor.get()
-            try:
-                monitor_idx = int(monitor_str.split(":")[0].split(" ")[1])
-            except (IndexError, ValueError):
-                self.queue_status("Error: Invalid monitor selection.")
-                self.log_event("Error: Invalid monitor selection.", level="ERROR")
-                self.stop_event.set()
-                return
-
             with mss.mss() as sct:
-                monitors = sct.monitors
-                if monitor_idx < 1 or monitor_idx > len(monitors) - 1:
-                    self.queue_status(f"Error: Monitor {monitor_idx} does not exist.")
-                    self.log_event(f"Error: Monitor {monitor_idx} does not exist.", level="ERROR")
-                    self.stop_event.set()
-                    return
-                monitor = monitors[monitor_idx]
                 current_date = datetime.now().strftime("%Y-%m-%d")
-
                 while not self.stop_event.is_set():
+                    # Determine capture region based on capture mode
+                    if self.capture_mode.get() == "active_window" and win32gui:
+                        hwnd = win32gui.GetForegroundWindow()
+                        # Skip capturing if the active window is the recorder itself
+                        if hwnd == self.root.winfo_id():
+                            time.sleep(self.interval.get())
+                            continue
+                        rect = win32gui.GetWindowRect(hwnd)
+                        left, top, right, bottom = rect
+                        width = right - left
+                        height = bottom - top
+                        region = {'left': left, 'top': top, 'width': width, 'height': height}
+                    else:
+                        # Monitors mode
+                        selected_monitors = [self.monitors[idx] for idx, var in self.monitor_vars.items() if var.get()]
+                        if not selected_monitors:
+                            time.sleep(self.interval.get())
+                            continue
+                        left = min(m['left'] for m in selected_monitors)
+                        top = min(m['top'] for m in selected_monitors)
+                        right = max(m['left'] + m['width'] for m in selected_monitors)
+                        bottom = max(m['top'] + m['height'] for m in selected_monitors)
+                        width = right - left
+                        height = bottom - top
+                        region = {'left': left, 'top': top, 'width': width, 'height': height}
+
                     try:
-                        sct_img = sct.grab(monitor)
+                        sct_img = sct.grab(region)
                         img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
                     except Exception as e:
                         self.queue_status(f"Error capturing screen: {e}")
@@ -509,8 +527,8 @@ class ScreenshotApp:
                         self.stop_event.set()
                         break
 
+                    # Motion detection and screenshot saving logic (unchanged from previous snippet)
                     movement_detected = False
-
                     if not self.enable_motion_detection.get():
                         movement_detected = True
                         self.log_event("Motion detection is disabled. Capturing screenshot unconditionally.", level="INFO")
@@ -596,7 +614,7 @@ class ScreenshotApp:
 
     def save_screenshot(self, img, current_date, detection_type="unknown"):
         counter_str = f"{self.counter:06d}"
-        extension = "jpeg"
+        extension = "jpeg"  
         filename = f"{self.session_name.get()}_{counter_str}.{extension}"
         session_folder = os.path.join(self.save_directory.get(), self.session_name.get())
         os.makedirs(session_folder, exist_ok=True)
@@ -708,7 +726,6 @@ class ScreenshotApp:
         settings = {
             "save_directory": self.save_directory.get(),
             "interval": self.interval.get(),
-            "selected_monitor": self.selected_monitor.get(),
             "jpeg_quality": self.jpeg_quality.get(),
             "movement_detection_mode": self.movement_detection_mode.get(),
             "detect_keyboard": self.detect_keyboard.get(),
@@ -730,7 +747,6 @@ class ScreenshotApp:
                     settings = json.load(f)
                 self.save_directory.set(settings.get("save_directory", ""))
                 self.interval.set(settings.get("interval", 5.0))
-                self.selected_monitor.set(settings.get("selected_monitor", ""))
                 self.jpeg_quality.set(settings.get("jpeg_quality", 5))
                 self.movement_detection_mode.set(settings.get("movement_detection_mode", "image"))
                 self.detect_keyboard.set(settings.get("detect_keyboard", True))
@@ -755,9 +771,7 @@ class ScreenshotApp:
                     self.keyboard_listener.start()
                 else:
                     self.keyboard_listener = None
-
                 mouse.hook(self.on_mouse_event)
-
                 self.log_event("Keyboard and mouse listeners started.", level="INFO")
             else:
                 self.keyboard_listener = None
